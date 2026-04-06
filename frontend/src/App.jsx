@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import {
   AppBar,
@@ -546,7 +547,7 @@ function App() {
         <Toolbar>
           <Box sx={{ flexGrow: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
-              📚 AI Study Planner
+              📚 SMART STUDY PLANNER
             </Typography>
           </Box>
           <Button
@@ -619,6 +620,7 @@ function App() {
           {/* Form Controls */}
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={2.5}>
+
               <FormControl fullWidth>
                 <InputLabel sx={{ fontSize: '0.9rem' }}>Subject</InputLabel>
                 <Select
@@ -693,11 +695,12 @@ function App() {
                 onClick={() => setShowCustomDialog(true)}
               >
                 ✨ Custom Plan
+              
               </Button>
             </Grid>
           </Grid>
         </Paper>
-
+       
         {/* CUSTOM SUBJECT DIALOG */}
         <Dialog open={showCustomDialog} onClose={() => setShowCustomDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ fontWeight: 600, fontSize: '1.3rem', background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary})`, color: '#fff' }}>
@@ -969,6 +972,7 @@ function App() {
         </Alert>
       </Snackbar>
     </Box>
+        
   );
 }
 

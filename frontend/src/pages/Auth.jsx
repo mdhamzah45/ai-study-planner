@@ -224,7 +224,7 @@ const res = await fetch(`${API_URL}/api/register`, {
                 mb: 1,
               }}
             >
-              📚 AI Study Planner
+              📚 SMART STUDY PLANNER
             </Typography>
             <Typography
               variant="subtitle1"
