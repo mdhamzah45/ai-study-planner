@@ -324,6 +324,6 @@ For issues and questions:
 
 ---
 
-Made with dedication by Harshal Bsys27
+Hamzah Qamar
 <!-- Pair programming commit -->
 
