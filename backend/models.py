@@ -16,6 +16,7 @@ class User(db.Model):
     
     # Relationships
     plans = db.relationship('StudyPlan', backref='user', lazy=True, cascade='all, delete-orphan')
+    internal_marks = db.relationship('InternalMark', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def set_password(self, password):
         self.password = generate_password_hash(password)
@@ -74,3 +75,16 @@ class StudySession(db.Model):
     topic = db.Column(db.String(255), nullable=False)
     duration = db.Column(db.Integer, nullable=False)  # seconds
     completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class InternalMark(db.Model):
+    """Track internal marks per subject/exam."""
+    __tablename__ = 'internal_marks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    subject = db.Column(db.String(100), nullable=False)
+    exam_name = db.Column(db.String(100), nullable=False)
+    marks_scored = db.Column(db.Float, nullable=False)
+    max_marks = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

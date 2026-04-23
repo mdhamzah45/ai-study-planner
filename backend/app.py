@@ -6,7 +6,7 @@ import jwt
 from functools import wraps
 from dotenv import load_dotenv
 
-from models import db, User, StudyPlan, UserProgress, StudyNotes, StudySession
+from models import db, User, StudyPlan, UserProgress, StudyNotes, StudySession, InternalMark
 from config import get_config
 
 load_dotenv()
@@ -257,6 +257,119 @@ def create_app():
         except Exception as e:
             db.session.rollback()
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/internal-marks", methods=["GET"])
+    @token_required
+    def get_internal_marks(current_user_id):
+        marks = (
+            InternalMark.query
+            .filter_by(user_id=current_user_id)
+            .order_by(InternalMark.created_at.desc())
+            .all()
+        )
+        return jsonify([
+            {
+                "id": mark.id,
+                "subject": mark.subject,
+                "exam_name": mark.exam_name,
+                "marks_scored": mark.marks_scored,
+                "max_marks": mark.max_marks,
+                "percentage": round((mark.marks_scored / mark.max_marks) * 100, 2) if mark.max_marks else 0,
+                "created_at": mark.created_at.isoformat(),
+            }
+            for mark in marks
+        ]), 200
+
+    @app.route("/api/internal-marks", methods=["POST"])
+    @token_required
+    def add_internal_mark(current_user_id):
+        try:
+            data = request.json or {}
+            subject = (data.get("subject") or "").strip()
+            exam_name = (data.get("exam_name") or "").strip()
+            marks_scored = data.get("marks_scored")
+            max_marks = data.get("max_marks")
+
+            if not subject or not exam_name:
+                return jsonify({"error": "Subject and exam name are required"}), 400
+
+            if marks_scored is None or max_marks is None:
+                return jsonify({"error": "Marks scored and max marks are required"}), 400
+
+            marks_scored = float(marks_scored)
+            max_marks = float(max_marks)
+
+            if max_marks <= 0 or marks_scored < 0 or marks_scored > max_marks:
+                return jsonify({"error": "Invalid marks values"}), 400
+
+            mark = InternalMark(
+                user_id=current_user_id,
+                subject=subject,
+                exam_name=exam_name,
+                marks_scored=marks_scored,
+                max_marks=max_marks,
+            )
+            db.session.add(mark)
+            db.session.commit()
+
+            return jsonify({
+                "message": "Internal mark added successfully",
+                "id": mark.id,
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/study-recommendation", methods=["GET"])
+    @token_required
+    def get_study_recommendation(current_user_id):
+        marks = InternalMark.query.filter_by(user_id=current_user_id).all()
+        if not marks:
+            return jsonify({
+                "overall_percentage": None,
+                "level": "No Data",
+                "recommendation": "Add internal marks to receive personalized study recommendations.",
+                "subject_focus": [],
+            }), 200
+
+        subject_buckets = {}
+        total_scored = 0.0
+        total_max = 0.0
+
+        for mark in marks:
+            total_scored += mark.marks_scored
+            total_max += mark.max_marks
+            if mark.subject not in subject_buckets:
+                subject_buckets[mark.subject] = {"scored": 0.0, "max": 0.0}
+            subject_buckets[mark.subject]["scored"] += mark.marks_scored
+            subject_buckets[mark.subject]["max"] += mark.max_marks
+
+        overall_percentage = (total_scored / total_max * 100) if total_max else 0
+
+        weak_subjects = []
+        for subject, data in subject_buckets.items():
+            pct = (data["scored"] / data["max"] * 100) if data["max"] else 0
+            if pct < 70:
+                weak_subjects.append({"subject": subject, "percentage": round(pct, 2)})
+
+        weak_subjects.sort(key=lambda s: s["percentage"])
+
+        if overall_percentage >= 85:
+            level = "Strong"
+            recommendation = "Your performance is strong. Focus on advanced problem solving and timed mock tests."
+        elif overall_percentage >= 70:
+            level = "Moderate"
+            recommendation = "Your performance is stable. Revise medium-priority topics and practice previous year questions."
+        else:
+            level = "Needs Improvement"
+            recommendation = "Prioritize fundamentals and weak subjects. Allocate extra daily time to low-scoring areas."
+
+        return jsonify({
+            "overall_percentage": round(overall_percentage, 2),
+            "level": level,
+            "recommendation": recommendation,
+            "subject_focus": weak_subjects[:3],
+        }), 200
 
     return app
 

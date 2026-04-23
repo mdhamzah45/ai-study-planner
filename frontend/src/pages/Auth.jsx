@@ -17,9 +17,9 @@ import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 const API_URL = import.meta.env.VITE_API_URL;
 const COLORS = {
-  primary: '#0F766E',
-  secondary: '#06B6D4',
-  bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  primary: '#1D4ED8',
+  secondary: '#1E3A8A',
+  bg: 'linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%)',
 };
 
 
@@ -205,8 +205,14 @@ const res = await fetch(`${API_URL}/api/register`, {
         <Card
           sx={{
             borderRadius: 4,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.35)',
             overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,0.2)',
+            transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+            '&:hover': {
+              transform: 'translateY(-6px)',
+              boxShadow: '0 24px 70px rgba(59, 130, 246, 0.38)',
+            },
           }}
         >
           <Box
@@ -358,7 +364,8 @@ const res = await fetch(`${API_URL}/api/register`, {
                     borderRadius: 2,
                     textTransform: 'capitalize',
                     '&:hover': {
-                      boxShadow: `0 8px 24px rgba(15, 118, 110, 0.3)`,
+                      transform: 'translateY(-2px)',
+                      boxShadow: `0 12px 30px rgba(30, 58, 138, 0.45)`,
                     },
                   }}
                   type="submit"
@@ -478,7 +485,8 @@ const res = await fetch(`${API_URL}/api/register`, {
                     borderRadius: 2,
                     textTransform: 'capitalize',
                     '&:hover': {
-                      boxShadow: `0 8px 24px rgba(15, 118, 110, 0.3)`,
+                      transform: 'translateY(-2px)',
+                      boxShadow: `0 12px 30px rgba(30, 58, 138, 0.45)`,
                     },
                   }}
                   type="submit"
@@ -489,11 +497,6 @@ const res = await fetch(`${API_URL}/api/register`, {
               </form>
             )}
 
-            <Box sx={{ mt: 3, p: 2, background: '#F0F9FF', borderRadius: 2 }}>
-              <Typography variant="caption" sx={{ color: '#475569' }}>
-                💡 <strong>Demo Credentials:</strong> Use username "demo" and password "123456"!
-              </Typography>
-            </Box>
           </CardContent>
         </Card>
 

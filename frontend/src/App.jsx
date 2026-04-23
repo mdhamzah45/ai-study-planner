@@ -54,8 +54,6 @@ import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import StopIcon from "@mui/icons-material/Stop";
-
-import Auth from "./pages/Auth";
 const API_URL = import.meta.env.VITE_API_URL;
 
 
@@ -63,10 +61,13 @@ const COLORS = {
   ahead: "#10B981",
   track: "#F59E0B",
   behind: "#EF4444",
-  primary: "#0F766E",
-  secondary: "#06B6D4",
-  bg: "#F8FAFC",
+  primary: "#1D4ED8",
+  secondary: "#3B82F6",
+  bg: "#F4F8FF",
   cardBg: "#FFFFFF",
+  border: "#D6E4FF",
+  hoverGlow: "0 14px 40px rgba(59, 130, 246, 0.24)",
+  hoverGlowSoft: "0 8px 24px rgba(29, 78, 216, 0.18)",
 };
 
 
@@ -248,8 +249,8 @@ const SUBJECTS_DB = {
 };
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState("guest");
   const [subject, setSubject] = useState("DSA");
   const [days, setDays] = useState(3);
   const [hours, setHours] = useState(2);
@@ -270,6 +271,26 @@ function App() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [studyHistory, setStudyHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [internalMarks, setInternalMarks] = useState([]);
+  const [marksForm, setMarksForm] = useState({
+    subject: "DSA",
+    examName: "",
+    marksScored: "",
+    maxMarks: "100",
+  });
+  const [recommendation, setRecommendation] = useState(null);
+
+  const softHoverCardSx = {
+    borderRadius: 3,
+    border: `1px solid ${COLORS.border}`,
+    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.05)",
+    transition: "box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease",
+    "&:hover": {
+      boxShadow: "0 4px 12px rgba(15, 23, 42, 0.08)",
+      borderColor: "#BFDBFE",
+      backgroundColor: "#FAFCFF",
+    },
+  };
 
   // Helper functions for user-specific storage
   const getCustomSubjectsKey = (userId) => `customSubjects_${userId}`;
@@ -295,8 +316,27 @@ function App() {
       if (historyData) {
         setStudyHistory(JSON.parse(historyData));
       }
+    } else {
+      setCurrentUserId("guest");
+      setIsAuthenticated(true);
+
+      const customSubjectsData = localStorage.getItem(getCustomSubjectsKey("guest"));
+      if (customSubjectsData) {
+        setCustomSubjects(JSON.parse(customSubjectsData));
+      }
+
+      const historyData = localStorage.getItem(getStudyHistoryKey("guest"));
+      if (historyData) {
+        setStudyHistory(JSON.parse(historyData));
+      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchInternalMarks();
+    fetchRecommendation();
+  }, [isAuthenticated]);
 
   // Save custom subjects to user-specific localStorage
   useEffect(() => {
@@ -332,16 +372,108 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setIsAuthenticated(false);
-    setCurrentUserId(null);
+    setIsAuthenticated(true);
+    setCurrentUserId("guest");
     setPlan([]);
     setStudyHistory([]);
     setCustomSubjects({});
+    setInternalMarks([]);
+    setRecommendation(null);
   };
 
   // Show snackbar
   const showSnackbar = (message, type = 'success') => {
     setSnackbar({ open: true, message, type });
+  };
+
+  const fetchInternalMarks = async () => {
+    const token = getToken();
+    if (!token) {
+      setInternalMarks([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/internal-marks`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setInternalMarks(data);
+    } catch (error) {
+      console.error("Failed to fetch internal marks", error);
+    }
+  };
+
+  const fetchRecommendation = async () => {
+    const token = getToken();
+    if (!token) {
+      setRecommendation({
+        overall_percentage: null,
+        level: "Guest Mode",
+        recommendation: "Login is currently disabled. You can still generate plans and track progress locally.",
+        subject_focus: [],
+      });
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/study-recommendation`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setRecommendation(data);
+    } catch (error) {
+      console.error("Failed to fetch recommendation", error);
+    }
+  };
+
+  const handleAddInternalMark = async () => {
+    const token = getToken();
+    if (!token) {
+      showSnackbar("Internal marks API requires login (currently disabled)", "error");
+      return;
+    }
+
+    if (!marksForm.examName.trim()) {
+      showSnackbar("Please enter exam name", "error");
+      return;
+    }
+
+    const marksScored = Number(marksForm.marksScored);
+    const maxMarks = Number(marksForm.maxMarks);
+    if (!Number.isFinite(marksScored) || !Number.isFinite(maxMarks) || maxMarks <= 0 || marksScored < 0 || marksScored > maxMarks) {
+      showSnackbar("Enter valid marks", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/internal-marks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subject: marksForm.subject,
+          exam_name: marksForm.examName,
+          marks_scored: marksScored,
+          max_marks: maxMarks,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showSnackbar(data.error || "Failed to add mark", "error");
+        return;
+      }
+
+      setMarksForm((prev) => ({ ...prev, examName: "", marksScored: "" }));
+      showSnackbar("✅ Internal marks added");
+      await fetchInternalMarks();
+      await fetchRecommendation();
+    } catch (error) {
+      showSnackbar("Network error while adding marks", "error");
+    }
   };
 
   // Format timer
@@ -467,11 +599,13 @@ function App() {
       !updated[dayIndex].topics[subIndex].completed;
 
     try {
-     await fetch(`${API_URL}/api/plans/1/progress`, {
+      const token = getToken();
+      if (token) {
+        await fetch(`${API_URL}/api/plans/1/progress`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${getToken()}`
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
           day: dayIndex + 1,
@@ -479,6 +613,7 @@ function App() {
           completed: updated[dayIndex].topics[subIndex].completed,
         }),
       });
+      }
 
       setPlan(updated);
       const action = updated[dayIndex].topics[subIndex].completed ? 'completed' : 'uncompleted';
@@ -530,11 +665,6 @@ function App() {
     ? Math.round((pieData[0].value / (pieData[0].value + pieData[1].value)) * 100)
     : 0;
 
-  // Show auth page if not logged in
-  if (!isAuthenticated) {
-    return <Auth onLoginSuccess={() => setIsAuthenticated(true)} />;
-  }
-
   const currentSubjectData = allSubjects[subject];
 
   // ===============================
@@ -543,7 +673,7 @@ function App() {
   return (
     <Box sx={{ background: COLORS.bg, minHeight: "100vh" }}>
       {/* NAVBAR */}
-      <AppBar position="sticky" sx={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary})`, boxShadow: "0 4px 20px rgba(15, 118, 110, 0.15)" }}>
+      <AppBar position="sticky" sx={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary})`, boxShadow: "0 10px 30px rgba(15, 118, 110, 0.24)" }}>
         <Toolbar>
           <Box sx={{ flexGrow: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
@@ -553,14 +683,29 @@ function App() {
           <Button
             color="inherit"
             onClick={() => setShowHistory(!showHistory)}
-            sx={{ textTransform: "capitalize", "&:hover": { background: "rgba(255,255,255,0.1)" }, mr: 1 }}
+            sx={{
+              textTransform: "capitalize",
+              borderRadius: 2,
+              transition: "all 0.2s ease",
+              "&:hover": {
+                background: "rgba(255,255,255,0.14)",
+              },
+              mr: 1
+            }}
           >
             📋 History
           </Button>
           <Button
             color="inherit"
             onClick={handleLogout}
-            sx={{ textTransform: "capitalize", "&:hover": { background: "rgba(255,255,255,0.1)" } }}
+            sx={{
+              textTransform: "capitalize",
+              borderRadius: 2,
+              transition: "all 0.2s ease",
+              "&:hover": {
+                background: "rgba(255,255,255,0.14)",
+              }
+            }}
           >
             🚪 Logout
           </Button>
@@ -570,7 +715,7 @@ function App() {
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* STUDY HISTORY PANEL */}
         {showHistory && (
-          <Card sx={{ mb: 3, borderRadius: 3, background: "#F0F9FF", border: `2px solid ${COLORS.secondary}` }}>
+          <Card sx={{ ...softHoverCardSx, mb: 3, background: "#F0F9FF", border: `2px solid ${COLORS.secondary}` }}>
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -598,13 +743,13 @@ function App() {
         )}
 
         {/* CONTROLS */}
-        <Paper elevation={0} sx={{ p: 3, mb: 4, background: COLORS.cardBg, borderRadius: 3, border: `1px solid #E2E8F0` }}>
+        <Paper elevation={0} sx={{ p: 3, mb: 4, background: COLORS.cardBg, borderRadius: 3, border: `1px solid #E2E8F0`, boxShadow: "0 8px 28px rgba(15, 23, 42, 0.06)" }}>
           <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
             📋 Plan Your Study
           </Typography>
 
           {/* Subject Selection Card */}
-          <Card sx={{ mb: 3, borderRadius: 2, background: "#F0F9FF", border: `2px solid ${COLORS.secondary}` }}>
+          <Card sx={{ ...softHoverCardSx, mb: 3, borderRadius: 2, background: "#F0F9FF", border: `2px solid ${COLORS.secondary}` }}>
             <CardContent>
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
@@ -680,7 +825,16 @@ function App() {
               <Button
                 fullWidth
                 variant="contained"
-                sx={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary})`, borderRadius: 2, fontWeight: 600, py: 1.5 }}
+                sx={{
+                  background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary})`,
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  py: 1.5,
+                  transition: "all 0.25s ease",
+                  "&:hover": {
+                    boxShadow: "0 6px 16px rgba(29, 78, 216, 0.2)",
+                  },
+                }}
                 onClick={generatePlan}
               >
                 🚀 Generate
@@ -691,7 +845,18 @@ function App() {
               <Button
                 fullWidth
                 variant="outlined"
-                sx={{ borderColor: COLORS.primary, color: COLORS.primary, borderRadius: 2, fontWeight: 600, py: 1.5 }}
+                sx={{
+                  borderColor: COLORS.primary,
+                  color: COLORS.primary,
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  py: 1.5,
+                  transition: "all 0.25s ease",
+                  "&:hover": {
+                    background: "rgba(59, 130, 246, 0.05)",
+                    borderColor: "#60A5FA",
+                  },
+                }}
                 onClick={() => setShowCustomDialog(true)}
               >
                 ✨ Custom Plan
@@ -783,6 +948,143 @@ function App() {
           </DialogActions>
         </Dialog>
 
+        {/* INTERNAL MARKS TRACKING + RECOMMENDATION */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={7}>
+            <Card sx={{ ...softHoverCardSx }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  📝 Internal Marks Tracking
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} sm={4}>
+                    <FormControl fullWidth>
+                      <InputLabel sx={{ fontSize: "0.9rem" }}>Subject</InputLabel>
+                      <Select
+                        value={marksForm.subject}
+                        label="Subject"
+                        onChange={(e) => setMarksForm((prev) => ({ ...prev, subject: e.target.value }))}
+                      >
+                        {Object.keys(allSubjects).map((sub) => (
+                          <MenuItem key={sub} value={sub}>{sub}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Exam Name"
+                      placeholder="Mid-1 / Unit Test"
+                      value={marksForm.examName}
+                      onChange={(e) => setMarksForm((prev) => ({ ...prev, examName: e.target.value }))}
+                    />
+                  </Grid>
+                  <Grid item xs={6} sm={2}>
+                    <TextField
+                      fullWidth
+                      label="Scored"
+                      type="number"
+                      value={marksForm.marksScored}
+                      onChange={(e) => setMarksForm((prev) => ({ ...prev, marksScored: e.target.value }))}
+                    />
+                  </Grid>
+                  <Grid item xs={6} sm={2}>
+                    <TextField
+                      fullWidth
+                      label="Max"
+                      type="number"
+                      value={marksForm.maxMarks}
+                      onChange={(e) => setMarksForm((prev) => ({ ...prev, maxMarks: e.target.value }))}
+                    />
+                  </Grid>
+                </Grid>
+                <Button
+                  variant="contained"
+                  onClick={handleAddInternalMark}
+                  sx={{
+                    mb: 2,
+                    background: COLORS.primary,
+                    transition: "all 0.25s ease",
+                    "&:hover": {
+                      background: "#2563EB",
+                      boxShadow: "0 6px 14px rgba(29, 78, 216, 0.2)",
+                    },
+                  }}
+                >
+                  Add Mark
+                </Button>
+                <Divider sx={{ mb: 1 }} />
+                {internalMarks.length === 0 ? (
+                  <Typography color="textSecondary">No marks added yet.</Typography>
+                ) : (
+                  <List sx={{ maxHeight: 220, overflowY: "auto" }}>
+                    {internalMarks.map((entry) => (
+                      <ListItem
+                        key={entry.id}
+                        sx={{
+                          borderBottom: "1px solid #E2E8F0",
+                          "&:last-child": { borderBottom: "none" },
+                          borderRadius: 1.5,
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            background: "#F8FCFF",
+                            boxShadow: "inset 0 0 0 1px rgba(59, 130, 246, 0.2)",
+                          },
+                        }}
+                      >
+                        <ListItemText
+                          primary={`${entry.subject} • ${entry.exam_name}`}
+                          secondary={`${entry.marks_scored}/${entry.max_marks} (${entry.percentage}%)`}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <Card sx={{ ...softHoverCardSx, height: "100%" }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  🤖 Intelligent Study Recommendation
+                </Typography>
+                {!recommendation ? (
+                  <Typography color="textSecondary">Loading recommendation...</Typography>
+                ) : (
+                  <>
+                    <Chip
+                      label={`Level: ${recommendation.level}`}
+                      sx={{ mb: 2, background: COLORS.secondary, color: "#fff", fontWeight: 600 }}
+                    />
+                    <Typography sx={{ mb: 2 }}>
+                      {recommendation.recommendation}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      Overall Score: {recommendation.overall_percentage ?? "N/A"}%
+                    </Typography>
+                    {recommendation.subject_focus?.length > 0 && (
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                          Focus Subjects:
+                        </Typography>
+                        {recommendation.subject_focus.map((item) => (
+                          <Chip
+                            key={item.subject}
+                            label={`${item.subject} (${item.percentage}%)`}
+                            sx={{ mr: 1, mb: 1 }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
         {/* TIMER CARD */}
         {plan.length > 0 && (
           <Card sx={{ mb: 4, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}10, ${COLORS.secondary}10)`, border: `2px solid ${COLORS.secondary}` }}>
@@ -799,7 +1101,15 @@ function App() {
                 <Box sx={{ display: "flex", gap: 1 }}>
                   <Button
                     variant="contained"
-                    sx={{ background: timerActive ? COLORS.behind : COLORS.ahead, borderRadius: 2 }}
+                    sx={{
+                      background: timerActive ? COLORS.behind : COLORS.ahead,
+                      borderRadius: 2,
+                      transition: "all 0.25s ease",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: COLORS.hoverGlowSoft,
+                      },
+                    }}
                     startIcon={timerActive ? <PauseIcon /> : <PlayArrowIcon />}
                     onClick={() => setTimerActive(!timerActive)}
                   >
@@ -807,7 +1117,17 @@ function App() {
                   </Button>
                   <Button
                     variant="outlined"
-                    sx={{ borderColor: COLORS.primary, color: COLORS.primary, borderRadius: 2 }}
+                    sx={{
+                      borderColor: COLORS.primary,
+                      color: COLORS.primary,
+                      borderRadius: 2,
+                      transition: "all 0.25s ease",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: COLORS.hoverGlowSoft,
+                        background: "rgba(15, 118, 110, 0.06)",
+                      },
+                    }}
                     startIcon={<StopIcon />}
                     onClick={() => { setTimerSeconds(0); setTimerActive(false); showSnackbar('⏱️ Timer reset'); }}
                   >
@@ -824,7 +1144,7 @@ function App() {
           <>
             <Grid container spacing={3} sx={{ mb: 4 }}>
               <Grid item xs={12} md={4}>
-                <Card sx={{ borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                <Card sx={{ ...softHoverCardSx }}>
                   <CardContent>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                       📊 Overall Progress
@@ -853,7 +1173,7 @@ function App() {
               </Grid>
 
               <Grid item xs={12} md={8}>
-                <Card sx={{ borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                <Card sx={{ ...softHoverCardSx }}>
                   <CardContent>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                       📈 Day-wise Progress
@@ -884,7 +1204,18 @@ function App() {
                 const status = statusInfo(day);
                 return (
                   <Grid item xs={12} key={i}>
-                    <Accordion defaultExpanded={i === 0} sx={{ borderRadius: 2, border: `2px solid ${status.color}20` }}>
+                    <Accordion
+                      defaultExpanded={i === 0}
+                      sx={{
+                        borderRadius: 2,
+                        border: `2px solid ${status.color}20`,
+                        boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)",
+                        transition: "all 0.25s ease",
+                        "&:hover": {
+                          boxShadow: "0 6px 16px rgba(15, 23, 42, 0.08)",
+                        },
+                      }}
+                    >
                       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: "#F9FAFB", py: 2 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
                           <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.primary, minWidth: 80 }}>
@@ -907,7 +1238,7 @@ function App() {
                           <>
                             <List sx={{ p: 0 }}>
                               {day.topics.map((topic, j) => (
-                                <ListItem key={j} sx={{ py: 1.5, borderBottom: "1px solid #E2E8F0", "&:last-child": { borderBottom: "none" }, transition: "all 0.2s", cursor: "pointer", "&:hover": { background: "#F0F9FF" } }} onClick={() => toggleSubtopic(i, j)}>
+                                <ListItem key={j} sx={{ py: 1.5, borderBottom: "1px solid #E2E8F0", "&:last-child": { borderBottom: "none" }, transition: "all 0.2s", cursor: "pointer", "&:hover": { background: "#F8FBFF", boxShadow: "inset 0 0 0 1px rgba(59, 130, 246, 0.15)" } }} onClick={() => toggleSubtopic(i, j)}>
                                   <ListItemIcon sx={{ minWidth: 40 }}>
                                     {topic.completed ? (
                                       <CheckCircleIcon sx={{ color: COLORS.ahead, fontSize: 24 }} />
